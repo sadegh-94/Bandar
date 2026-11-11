@@ -5,11 +5,12 @@ import os
 import time
 from datetime import datetime
 
-from flask import Flask, render_template_string, jsonify, request, session, redirect, url_for
+from flask import render_template_string, jsonify, request, session, redirect, url_for
 
+from core import server
 from dashboards import load_dashboards
 
-app = Flask(__name__)
+app = server
 
 IS_VERCEL = bool(os.environ.get('VERCEL'))
 _secret = os.environ.get('SECRET_KEY')
@@ -20,7 +21,7 @@ if not _secret:
 app.secret_key = _secret
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax', SESSION_COOKIE_SECURE=IS_VERCEL)
 
-DASHBOARDS = load_dashboards(app, lambda u, k: user_can_access_dashboard(u, k))  # {key: META} + ثبت Blueprint هر داشبورد در /d/<key>/
+DASHBOARDS = load_dashboards(app)  # {key: META}؛ هر داشبورد روی /d/<key>/ سرو می‌شود
 
 
 def hash_password(password):
@@ -1170,6 +1171,19 @@ MAIN_TEMPLATE = '''
 </body>
 </html>
 '''
+
+@app.before_request
+def guard_dashboards():
+    """همه مسیرهای /d/<key>/... (Blueprint یا Dash) فقط برای کاربر واردشده و مجاز."""
+    if not request.path.startswith('/d/'):
+        return None
+    key = request.path.split('/')[2] if request.path.count('/') >= 2 else ''
+    if 'user' not in session:
+        return redirect('/login')
+    if not user_can_access_dashboard(session['user'], key):
+        return jsonify({'error': 'Access Denied'}), 403
+    return None
+
 
 @app.route('/')
 def index():
