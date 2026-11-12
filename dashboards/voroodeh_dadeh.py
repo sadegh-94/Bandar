@@ -38,6 +38,9 @@ META = {
 }
 
 app = dash.Dash(__name__, server=server, url_base_pathname='/d/voroodeh_dadeh/')
+# نمایش پیام خطای کال‌بک‌ها (مثلاً ۴۱۳/۵۰۴/۵۰۰) در گوشه صفحه، بدون فعال‌کردن حالت debug
+app.enable_dev_tools(debug=False, dev_tools_ui=True, dev_tools_props_check=False,
+                     dev_tools_hot_reload=False, dev_tools_serve_dev_bundles=False)
 app.title = "سیستم ورود و خروجی اطلاعات"
 
 # تنظیمات نوار پیشرفت
