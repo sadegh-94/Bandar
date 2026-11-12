@@ -21,6 +21,7 @@ import webbrowser
 import time
 import sys
 import os
+import re
 import io
 import multiprocessing
 from datetime import datetime
@@ -506,14 +507,32 @@ def clean_data(df, data_type, selected_month, selected_year, sheet_name=None):
 # توابع جدید برای خروجی اکسل
 # =============================================================================
 
+def _find_db_url():
+    """آدرس Postgres را از متغیرهای محیطی پیدا می‌کند (DATABASE_URL، POSTGRES_URL یا هر متغیر با پیشوند مثل STORAGE_DATABASE_URL)."""
+    for name in ('DATABASE_URL', 'POSTGRES_URL'):
+        if os.environ.get(name):
+            return os.environ[name]
+    candidates = []
+    for name, value in os.environ.items():
+        if value.startswith(('postgres://', 'postgresql://')) and 'PRISMA' not in name and 'UNPOOLED' not in name and 'NON_POOLING' not in name:
+            candidates.append((name, value))
+    if candidates:
+        return sorted(candidates)[0][1]
+    for name, value in os.environ.items():
+        if value.startswith(('postgres://', 'postgresql://')) and 'PRISMA' not in name:
+            return value
+    return None
+
+
 def _make_engine():
-    """DATABASE_URL (مثلاً Postgres در Neon) → دائمی؛ محلی: فایل SQLite؛ روی Vercel بدون DATABASE_URL: غیرفعال."""
-    url = os.environ.get('DATABASE_URL')
+    """Postgres (دائمی) اگر آدرسش تنظیم باشد؛ محلی: فایل SQLite؛ روی Vercel بدون دیتابیس: غیرفعال."""
+    url = _find_db_url()
     if url:
         if url.startswith('postgres://'):
             url = 'postgresql://' + url[len('postgres://'):]
         if url.startswith('postgresql://'):
             url = 'postgresql+psycopg2://' + url[len('postgresql://'):]
+        url = re.sub(r'([?&])(pgbouncer|supa)=[^&]*&?', r'\1', url).rstrip('?&')
         return create_engine(url, poolclass=NullPool)
     if os.environ.get('VERCEL'):
         return None  # فایل‌سیستم Vercel دائمی نیست؛ ذخیره نمی‌کنیم تا داده بی‌صدا از بین نرود
@@ -521,7 +540,7 @@ def _make_engine():
     return create_engine(f'sqlite:///{path}', poolclass=NullPool)
 
 ENGINE = _make_engine()
-NO_DB_MESSAGE = "⚠️ پایگاه داده دائمی تنظیم نشده است (متغیر DATABASE_URL). ذخیره‌سازی انجام نشد."
+NO_DB_MESSAGE = "⚠️ آدرس پایگاه داده پیدا نشد. در Vercel بخش Settings ← Environment Variables یک متغیر با مقدار postgres://... (مثلاً DATABASE_URL) برای Production تنظیم و دوباره Redeploy کنید. ذخیره‌سازی انجام نشد."
 
 
 def _quote(name):
